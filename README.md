@@ -1,6 +1,6 @@
 # Orbitra: concept website
 
-A one-page WebGL site for a fictional satellite-data company. It is a portfolio piece by **Milan John Davis**.
+A concept build: a one-page WebGL site for **Orbitra**, a satellite-data company. It is a portfolio piece by **Milan John Davis**.
 
 **Live site:** https://milan-jd.github.io/orbitra/
 
