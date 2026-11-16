@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Orbitra — Earth, in real time</title>
+<meta name="description" content="Orbitra is a concept site: a satellite constellation, one API, and a live view of the planet. A WebGL one-pager built in code.">
+<meta name="theme-color" content="#05060A">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%2305060A' stroke='%235CE1FF' stroke-width='2'/%3E%3Ccircle cx='23' cy='9' r='3' fill='%235CE1FF'/%3E%3C/svg%3E">
+<style>
+@font-face{font-family:"Inter";font-weight:400;font-display:swap;src:url(Inter-Regular.woff2) format("woff2")}
+@font-face{font-family:"Inter";font-weight:500;font-display:swap;src:url(Inter-Medium.woff2) format("woff2")}
+@font-face{font-family:"Inter Display";font-weight:500;font-display:swap;src:url(InterDisplay-Medium.woff2) format("woff2")}
+@font-face{font-family:"Inter Display";font-weight:700;font-display:swap;src:url(InterDisplay-Bold.woff2) format("woff2")}
+:root{--bg:#05060A;--ink:#EAF0FF;--mut:#8E97B2;--line:rgba(160,180,255,.14);--cy:#5CE1FF;--vi:#8B7BFF;--lm:#B6FF6A;--card:rgba(14,17,28,.62);
+--mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--ink);font:400 17px/1.6 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+::selection{background:var(--cy);color:#001018}
+a{color:inherit;text-decoration:none}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--cy);outline-offset:3px;border-radius:6px}
+h1,h2,h3{font-family:"Inter Display",Inter,sans-serif;font-weight:700;letter-spacing:-.035em;line-height:1.02}
+canvas#gl{position:fixed;inset:0;width:100%;height:100%;z-index:0;display:block}
+.vig{position:fixed;inset:0;z-index:1;pointer-events:none;background:radial-gradient(120% 90% at 50% 40%,transparent 40%,rgba(5,6,10,.85) 100%)}
+.grain{position:fixed;inset:-50%;z-index:60;pointer-events:none;opacity:.05;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");animation:gr 1s steps(6) infinite}
+@keyframes gr{0%{transform:translate(0,0)}20%{transform:translate(-3%,2%)}40%{transform:translate(2%,-3%)}60%{transform:translate(-2%,-1%)}80%{transform:translate(3%,3%)}100%{transform:translate(0,0)}}
+main{position:relative;z-index:2}
+.wrap{width:min(1240px,100% - 48px);margin:0 auto}
+#prog{position:fixed;left:0;top:0;height:2px;width:100%;transform-origin:0 50%;transform:scaleX(0);background:linear-gradient(90deg,var(--cy),var(--vi));z-index:80}
+/* loader */
+#loader{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px;transition:opacity .8s .1s,visibility .9s}
+#loader.done{opacity:0;visibility:hidden}
+#loader b{font:500 13px var(--mono);letter-spacing:.3em;color:var(--mut)}
+#loader .bar{width:220px;height:2px;background:var(--line);overflow:hidden;border-radius:2px}
+#loader .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cy),var(--vi));transition:width .2s}
+#loader span{font:700 56px "Inter Display";letter-spacing:-.04em}
+/* cursor */
+#cur,#cur2{position:fixed;left:0;top:0;pointer-events:none;z-index:90;border-radius:50%;mix-blend-mode:screen;opacity:0;transition:opacity .3s}
+#cur{width:8px;height:8px;margin:-4px;background:var(--cy)}
+#cur2{width:38px;height:38px;margin:-19px;border:1px solid rgba(92,225,255,.6);transition:width .25s,height .25s,margin .25s,background .25s,opacity .3s}
+#cur2.big{width:74px;height:74px;margin:-37px;background:rgba(92,225,255,.1)}
+@media(hover:none){#cur,#cur2{display:none}}
+/* nav */
+nav{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:70;display:flex;align-items:center;gap:6px;padding:8px 8px 8px 20px;border:1px solid var(--line);border-radius:999px;background:rgba(10,12,20,.6);backdrop-filter:blur(18px) saturate(1.4);-webkit-backdrop-filter:blur(18px) saturate(1.4);width:max-content;max-width:calc(100% - 24px)}
+nav .logo{display:flex;align-items:center;gap:10px;font:700 17px "Inter Display";letter-spacing:-.02em;margin-right:14px}
+nav .logo svg{width:22px;height:22px}
+nav a.l{font-size:14px;color:var(--mut);padding:8px 14px;border-radius:999px;transition:color .2s,background .2s}
+nav a.l:hover,nav a.l.on{color:var(--ink);background:rgba(255,255,255,.06)}
+.btn{display:inline-flex;align-items:center;gap:10px;padding:14px 26px;border-radius:999px;font-weight:500;font-size:15px;border:1px solid var(--line);background:rgba(255,255,255,.04);cursor:pointer;transition:background .25s,border-color .25s,transform .2s;will-change:transform}
+.btn:hover{background:rgba(255,255,255,.09);border-color:rgba(160,180,255,.35)}
+.btn.pri{background:var(--ink);color:#05060A;border-color:var(--ink)}
+.btn.pri:hover{background:#fff;box-shadow:0 0 40px rgba(92,225,255,.45)}
+nav .btn{padding:9px 18px;font-size:14px}
+@media(max-width:820px){nav a.l{display:none}nav .logo{margin-right:8px}}
+/* hero */
+.hero{min-height:100svh;display:flex;align-items:center;padding:120px 0 90px}
+.eyebrow{display:inline-flex;align-items:center;gap:10px;font:500 12.5px var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--cy);padding:8px 14px;border:1px solid rgba(92,225,255,.28);border-radius:999px;background:rgba(92,225,255,.06)}
+.eyebrow i{width:7px;height:7px;border-radius:50%;background:var(--lm);box-shadow:0 0 12px var(--lm);animation:pl 1.6s infinite}
+@keyframes pl{50%{opacity:.25}}
+.hero h1{font-size:clamp(46px,8vw,118px);margin:26px 0 24px;max-width:11ch}
+.hero h1 .g,.g{background:linear-gradient(100deg,var(--cy),var(--vi) 60%,#D6C9FF);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p.lead{font-size:clamp(17px,1.5vw,21px);color:#B4BDD8;max-width:46ch}
+.hero .ctas{display:flex;gap:14px;margin-top:38px;flex-wrap:wrap}
+.hero .stats{display:flex;gap:44px;margin-top:64px;flex-wrap:wrap}
+.stat b{display:block;font:700 34px "Inter Display";letter-spacing:-.03em}
+.stat span{font:500 12px var(--mono);color:var(--mut);letter-spacing:.14em;text-transform:uppercase}
+.scrollhint{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);font:500 11px var(--mono);letter-spacing:.3em;color:var(--mut);display:flex;flex-direction:column;align-items:center;gap:10px}
+.scrollhint i{width:1px;height:38px;background:linear-gradient(var(--cy),transparent);animation:sh 2s infinite}
+@keyframes sh{0%{transform:scaleY(0);transform-origin:top}50%{transform:scaleY(1);transform-origin:top}51%{transform-origin:bottom}100%{transform:scaleY(0);transform-origin:bottom}}
+/* split reveal */
+.sp .w{display:inline-block;overflow:hidden;vertical-align:top;padding-bottom:.08em}
+.sp .w>span{display:inline-block;transform:translateY(110%);transition:transform 1s cubic-bezier(.2,.8,.2,1);transition-delay:calc(var(--i)*55ms)}
+.sp.in .w>span{transform:none}
+.rv{opacity:0;transform:translateY(34px);transition:opacity .9s,transform .9s cubic-bezier(.2,.8,.2,1);transition-delay:var(--d,0s)}
+.rv.in{opacity:1;transform:none}
+/* marquee */
+.marq{border-block:1px solid var(--line);background:rgba(5,6,10,.55);backdrop-filter:blur(8px);overflow:hidden;padding:22px 0;white-space:nowrap}
+.marq div{display:inline-flex;gap:56px;animation:mq 38s linear infinite;padding-right:56px}
+.marq span{font:700 28px "Inter Display";letter-spacing:-.02em;color:transparent;-webkit-text-stroke:1px rgba(190,205,255,.45)}
+.marq span:nth-child(even){color:var(--ink);-webkit-text-stroke:0}
+@keyframes mq{to{transform:translateX(-50%)}}
+section{position:relative}
+.sec{padding:150px 0}
+.kick{font:500 12.5px var(--mono);letter-spacing:.22em;text-transform:uppercase;color:var(--cy);margin-bottom:22px;display:block}
+h2{font-size:clamp(36px,5.4vw,76px);max-width:16ch}
+.sub{color:#A8B2CE;max-width:52ch;margin-top:22px;font-size:19px}
+/* bento */
+.bento{display:grid;grid-template-columns:repeat(6,1fr);gap:16px;margin-top:70px}
+.card{position:relative;border:1px solid var(--line);border-radius:26px;background:var(--card);backdrop-filter:blur(14px);padding:30px;overflow:hidden;min-height:300px;display:flex;flex-direction:column;justify-content:flex-end;transition:border-color .3s}
+.card::before{content:"";position:absolute;inset:0;background:radial-gradient(420px circle at var(--mx,50%) var(--my,50%),rgba(92,225,255,.14),transparent 55%);opacity:0;transition:opacity .3s}
+.card:hover::before{opacity:1}
+.card:hover{border-color:rgba(92,225,255,.35)}
+.card h3{font-size:26px;letter-spacing:-.025em;margin-bottom:8px;position:relative}
+.card p{color:#A3ADC9;font-size:15.5px;position:relative;max-width:40ch}
+.c1{grid-column:span 4}.c2{grid-column:span 2}.c3{grid-column:span 2}.c4{grid-column:span 2}.c5{grid-column:span 2}
+.card .viz{position:absolute;inset:0 0 auto 0;height:62%;overflow:hidden}
+.bars{display:flex;align-items:flex-end;gap:7px;height:100%;padding:34px 34px 0}
+.bars i{flex:1;border-radius:6px 6px 0 0;background:linear-gradient(var(--cy),rgba(92,225,255,.05));height:var(--h);transform-origin:bottom;animation:bar 3.2s ease-in-out infinite;animation-delay:calc(var(--k)*90ms)}
+@keyframes bar{50%{transform:scaleY(.45)}}
+.scan{background:linear-gradient(rgba(92,225,255,.08) 1px,transparent 1px) 0 0/100% 22px,linear-gradient(90deg,rgba(92,225,255,.08) 1px,transparent 1px) 0 0/22px 100%}
+.scan::after{content:"";position:absolute;left:0;right:0;height:60px;background:linear-gradient(transparent,rgba(92,225,255,.28),transparent);animation:sc 3.4s linear infinite}
+@keyframes sc{from{top:-60px}to{top:100%}}
+.scan .box{position:absolute;border:1.5px solid var(--lm);border-radius:4px;animation:bx 6s infinite}
+.scan .box::after{content:attr(data-l);position:absolute;top:-17px;left:-1px;font:500 10px var(--mono);background:var(--lm);color:#04100a;padding:1px 6px;border-radius:3px}
+.scan .box:nth-child(1){left:14%;top:30%;width:34%;height:34%}
+.scan .box:nth-child(2){left:58%;top:52%;width:26%;height:30%;animation-delay:2s}
+@keyframes bx{0%,18%{opacity:0}28%,80%{opacity:1}100%{opacity:0}}
+.code{padding:30px;font:400 13.5px/1.7 var(--mono);color:#9FB0D8;white-space:pre}
+.code b{color:var(--cy);font-weight:400}.code i{color:var(--lm);font-style:normal}.code em{color:#C7B8FF;font-style:normal}
+.big{position:absolute;top:30px;left:30px;font:700 clamp(54px,6vw,92px) "Inter Display";letter-spacing:-.05em;line-height:1}
+.big small{font-size:.32em;color:var(--mut);letter-spacing:0;margin-left:6px;font-weight:500}
+/* story */
+.story{padding:0}
+.story .track{height:340vh;position:relative}
+.story .stick{position:sticky;top:0;height:100svh;display:flex;align-items:center}
+.story .grid{display:grid;grid-template-columns:minmax(0,520px) 1fr;gap:60px;width:min(1240px,100% - 48px);margin:0 auto;align-items:center}
+.steps{position:relative;padding-left:34px}
+.steps::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:2px;background:var(--line)}
+.steps .fill{position:absolute;left:0;top:6px;width:2px;height:calc(var(--p,0)*(100% - 12px));background:linear-gradient(var(--cy),var(--vi));box-shadow:0 0 14px var(--cy)}
+.step{padding:22px 0;opacity:.32;transition:opacity .5s}
+.step.on{opacity:1}
+.step small{font:500 12px var(--mono);letter-spacing:.22em;color:var(--cy)}
+.step h3{font-size:clamp(30px,3.6vw,50px);margin:8px 0 10px}
+.step p{color:#A8B2CE;max-width:40ch}
+.hud{display:none;justify-self:end;width:min(420px,100%);aspect-ratio:1;border:1px solid var(--line);border-radius:50%;position:relative;display:flex;align-items:center;justify-content:center;background:radial-gradient(closest-side,rgba(92,225,255,.06),transparent)}
+.hud::before,.hud::after{content:"";position:absolute;border-radius:50%;border:1px dashed rgba(160,180,255,.22)}
+.hud::before{inset:12%;animation:spin 40s linear infinite}
+.hud::after{inset:26%;border-style:solid;border-color:rgba(92,225,255,.25);animation:spin 26s linear infinite reverse}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hud .core{text-align:center;position:relative}
+.hud .core b{display:block;font:700 64px "Inter Display";letter-spacing:-.05em}
+.hud .core span{font:500 12px var(--mono);letter-spacing:.2em;color:var(--mut);text-transform:uppercase}
+.hud .tick{position:absolute;font:500 11px var(--mono);color:var(--mut);letter-spacing:.14em}
+@media(max-width:860px){.story .grid{grid-template-columns:1fr}.hud{display:none}.bento{grid-template-columns:1fr}.c1,.c2,.c3,.c4,.c5{grid-column:auto}}
+/* telemetry */
+.tele{display:grid;grid-template-columns:1.5fr 1fr;gap:16px;margin-top:70px}
+.panel{border:1px solid var(--line);border-radius:26px;background:var(--card);backdrop-filter:blur(14px);padding:26px;position:relative;overflow:hidden}
+.panel h4{font:500 12px var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--mut);margin-bottom:16px;display:flex;justify-content:space-between}
+.panel h4 em{font-style:normal;color:var(--lm)}
+#chart{width:100%;height:260px;display:block}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:18px}
+.kpi b{display:block;font:700 30px "Inter Display";letter-spacing:-.03em}
+.kpi span{font:500 11px var(--mono);color:var(--mut);letter-spacing:.14em;text-transform:uppercase}
+#log{font:400 12.5px/1.9 var(--mono);color:#95A3CC;height:372px;overflow:hidden;mask-image:linear-gradient(transparent,#000 14%);-webkit-mask-image:linear-gradient(transparent,#000 14%);display:flex;flex-direction:column;justify-content:flex-end}
+#log div{animation:li .5s both;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#log div b{color:var(--cy);font-weight:400}#log div i{color:var(--lm);font-style:normal}
+@keyframes li{from{opacity:0;transform:translateY(8px)}}
+@media(max-width:900px){.tele{grid-template-columns:1fr}}
+/* simulator */
+.sim{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:70px}
+.sim .panel{padding:34px}
+.slider{margin:26px 0 8px}
+.slider label{display:flex;justify-content:space-between;font:500 12px var(--mono);letter-spacing:.18em;color:var(--mut);text-transform:uppercase;margin-bottom:16px}
+.slider label b{color:var(--cy);font-size:15px}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:4px;background:linear-gradient(90deg,var(--cy) var(--f,40%),rgba(255,255,255,.12) var(--f,40%));outline-offset:8px;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 0 0 6px rgba(92,225,255,.25),0 0 26px var(--cy);border:0}
+input[type=range]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 0 0 6px rgba(92,225,255,.25),0 0 26px var(--cy);border:0}
+.out{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:34px}
+.out div b{display:block;font:700 clamp(40px,4.4vw,64px) "Inter Display";letter-spacing:-.045em;line-height:1}
+.out div span{font:500 11.5px var(--mono);color:var(--mut);letter-spacing:.16em;text-transform:uppercase}
+.note{font:400 12.5px var(--mono);color:#6E7794;margin-top:26px}
+.sim .panel.alt{display:flex;flex-direction:column;justify-content:space-between}
+.modes{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
+.chip{padding:10px 16px;border-radius:999px;border:1px solid var(--line);font-size:14px;cursor:pointer;background:transparent;color:var(--mut);transition:all .25s}
+.chip.on{background:rgba(92,225,255,.12);border-color:rgba(92,225,255,.5);color:var(--ink)}
+@media(max-width:900px){.sim{grid-template-columns:1fr}}
+/* cta */
+.cta{padding:160px 0 100px;text-align:center}
+.cta h2{max-width:14ch;margin:0 auto;font-size:clamp(44px,8vw,120px)}
+.cta .sub{margin:26px auto 0}
+.form{display:flex;gap:10px;justify-content:center;margin-top:44px;flex-wrap:wrap}
+.form input{width:min(380px,100%);padding:16px 22px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.04);outline:none;transition:border-color .2s}
+.form input:focus{border-color:var(--cy)}
+.msg{height:24px;margin-top:18px;font:500 13px var(--mono);color:var(--lm);transition:opacity .3s}
+footer{border-top:1px solid var(--line);padding:34px 0 46px;color:var(--mut);font-size:14px;background:rgba(5,6,10,.7);backdrop-filter:blur(10px);position:relative;z-index:2}
+footer .wrap{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.sp .w>span{transform:none}.rv{opacity:1;transform:none}html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<div id="loader" aria-hidden="true"><b>INITIALISING ORBIT</b><span id="lp">0</span><div class="bar"><i id="lb"></i></div></div>
+<div id="prog"></div><div id="cur"></div><div id="cur2"></div>
+<canvas id="gl" aria-hidden="true"></canvas><div class="vig"></div><div class="grain"></div>
+
+<nav aria-label="Primary">
+  <a class="logo" href="#top" aria-label="Orbitra home"><svg viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="12" stroke="#5CE1FF" stroke-width="2"/><ellipse cx="16" cy="16" rx="15" ry="5.5" stroke="#8B7BFF" stroke-width="1.5" transform="rotate(-28 16 16)"/><circle cx="25" cy="9.5" r="2.6" fill="#B6FF6A"/></svg>Orbitra</a>
+  <a class="l" href="#platform">Platform</a><a class="l" href="#how">How it works</a><a class="l" href="#live">Live</a><a class="l" href="#simulate">Simulator</a>
+  <a class="btn pri" href="#start" data-mag>Request access</a>
+</nav>
+
+<main id="top">
+<section class="hero">
+  <div class="wrap">
+    <span class="eyebrow rv"><i></i>Earth intelligence network</span>
+    <h1 class="sp" id="h1">See the planet <span class="g">change.</span> As it happens.</h1>
+    <p class="lead rv" style="--d:.5s">A constellation of 48 satellites and one API. Fresh imagery of any place on Earth, every hour, ready to query.</p>
+    <div class="ctas rv" style="--d:.65s"><a class="btn pri" href="#simulate" data-mag>Explore the network <span aria-hidden="true">→</span></a><a class="btn" href="#start" data-mag>Book a demo</a></div>
+    <div class="stats rv" style="--d:.8s">
+      <div class="stat"><b data-n="48">0</b><span>Satellites</span></div>
+      <div class="stat"><b data-n="60" data-s="min">0</b><span>Revisit time</span></div>
+      <div class="stat"><b data-n="3" data-s="m">0</b><span>Resolution</span></div>
+    </div>
+  </div>
+  <div class="scrollhint" aria-hidden="true">SCROLL<i></i></div>
+</section>
+
+<div class="marq" aria-hidden="true"><div>
+  <span>Agriculture</span><span>Maritime</span><span>Energy</span><span>Climate</span><span>Insurance</span><span>Logistics</span><span>Forestry</span><span>Defence</span>
+  <span>Agriculture</span><span>Maritime</span><span>Energy</span><span>Climate</span><span>Insurance</span><span>Logistics</span><span>Forestry</span><span>Defence</span>
+</div></div>
+
+<section class="sec" id="platform"><div class="wrap">
+  <span class="kick rv">Platform</span>
+  <h2 class="sp">Everything between orbit and insight.</h2>
+  <p class="sub rv">Capture, process and deliver in one pipeline, so your team gets answers instead of raw pixels.</p>
+  <div class="bento">
+    <article class="card c1 rv" style="--d:.05s"><div class="viz"><div class="bars" aria-hidden="true"></div></div><h3>Hourly revisit</h3><p>Watch change at the pace it happens. Floods, fires, harvests and ships, refreshed every hour.</p></article>
+    <article class="card c2 rv" style="--d:.15s"><div class="viz scan" aria-hidden="true"><div class="box" data-l="VESSEL 98%"></div><div class="box" data-l="FIELD 94%"></div></div><h3>AI on board</h3><p>Models run in orbit, so only what matters is sent down.</p></article>
+    <article class="card c3 rv" style="--d:.05s"><div class="big"><span data-n="12" data-dec="0">0</span><small>PB</small></div><h3>Open archive</h3><p>A decade of imagery, searchable in seconds.</p></article>
+    <article class="card c4 rv" style="--d:.15s"><div class="viz code" id="typed" aria-hidden="true"></div><h3>One API</h3><p>Query by place, time and event. Get tiles, change maps and alerts.</p></article>
+    <article class="card c5 rv" style="--d:.25s"><div class="big"><span data-n="99.9" data-dec="1">0</span><small>%</small></div><h3>Uptime, measured</h3><p>Redundant ground stations on six continents.</p></article>
+  </div>
+</div></section>
+
+<section class="story" id="how">
+  <div class="track" id="track"><div class="stick"><div class="wrap grid">
+    <div>
+      <span class="kick">How it works</span>
+      <div class="steps" id="steps">
+        <div class="fill"></div>
+        <div class="step on"><small>01</small><h3>Capture</h3><p>48 satellites sweep the planet on staggered orbits, so no place waits long for a pass.</p></div>
+        <div class="step"><small>02</small><h3>Process</h3><p>Onboard models clean, tag and compress each frame before it ever leaves orbit.</p></div>
+        <div class="step"><small>03</small><h3>Deliver</h3><p>Results land in your stack through one API, in minutes and not days.</p></div>
+      </div>
+    </div>
+    <div class="hud" aria-hidden="true"><div class="core"><b id="hudn">01</b><span id="hudl">Capture</span></div>
+      <span class="tick" style="top:6%;left:50%;transform:translateX(-50%)">N</span><span class="tick" style="bottom:6%;left:50%;transform:translateX(-50%)">S</span><span class="tick" style="left:5%;top:50%">W</span><span class="tick" style="right:5%;top:50%">E</span></div>
+  </div></div></div>
+</section>
+
+<section class="sec" id="live"><div class="wrap">
+  <span class="kick rv">Live</span>
+  <h2 class="sp">The network, right now.</h2>
+  <p class="sub rv">A simulated feed, shown here for illustration. In production this panel streams real passes.</p>
+  <div class="tele">
+    <div class="panel rv"><h4>Images per minute <em>● LIVE</em></h4><canvas id="chart"></canvas>
+      <div class="kpis"><div class="kpi"><b id="k1">0</b><span>Passes today</span></div><div class="kpi"><b id="k2">0</b><span>Avg latency</span></div><div class="kpi"><b id="k3">0</b><span>Cloud free</span></div></div></div>
+    <div class="panel rv" style="--d:.12s"><h4>Event stream</h4><div id="log" aria-hidden="true"></div></div>
+  </div>
+</div></section>
+
+<section class="sec" id="simulate"><div class="wrap">
+  <span class="kick rv">Simulator</span>
+  <h2 class="sp">Build your own constellation.</h2>
+  <p class="sub rv">Drag the slider. The planet behind this page updates as you add satellites.</p>
+  <div class="sim">
+    <div class="panel rv">
+      <div class="slider"><label for="sat">Satellites <b id="satv">24</b></label><input type="range" id="sat" min="6" max="48" value="24" aria-describedby="simnote"></div>
+      <div class="out"><div><b id="o1">0</b><span>Revisit (minutes)</span></div><div><b id="o2">0</b><span>Coverage (%)</span></div></div>
+      <p class="note" id="simnote">Illustrative model for this demo. Not real performance data.</p>
+    </div>
+    <div class="panel alt rv" style="--d:.12s">
+      <div><h4 style="margin:0">View mode</h4><div class="modes" role="group" aria-label="View mode">
+        <button class="chip on" data-m="0">Natural</button><button class="chip" data-m="1">Thermal</button><button class="chip" data-m="2">Vegetation</button></div></div>
+      <p class="sub" style="font-size:16px;margin-top:30px">Switch modes and the globe re-colours in real time. Everything on this page is drawn live in WebGL.</p>
+    </div>
+  </div>
+</div></section>
+
+<section class="cta" id="start"><div class="wrap">
+  <h2 class="sp">Point it at your planet.</h2>
+  <p class="sub rv">Tell us where to look. We reply within a day.</p>
+  <form class="form rv" id="form" novalidate><input type="email" id="em" placeholder="you@company.com" aria-label="Email address" required><button class="btn pri" data-mag type="submit">Request access</button></form>
+  <div class="msg" id="msg" aria-live="polite"></div>
+</div></section>
+</main>
+<footer><div class="wrap"><span>© Orbitra, a concept build</span><span>Concept site designed and built by Milan John Davis. A minimal reference build; richer motion and features are scoped per project.</span></div></footer>
+<script src="app.js" type="module"></script>
+</body>
+</html>
